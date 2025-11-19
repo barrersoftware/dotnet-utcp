@@ -36,7 +36,7 @@ public class HttpTransport : ITransport, IAsyncDisposable
 
         try
         {
-            if (!request.Parameters?.TryGetValue("_callTemplate", out var templateObj) == true)
+            if (request.Parameters == null || !request.Parameters.TryGetValue("_callTemplate", out var templateObj))
             {
                 return CreateErrorResponse("HTTP call template not provided", "MISSING_TEMPLATE", request.RequestId);
             }
