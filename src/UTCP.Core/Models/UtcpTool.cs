@@ -11,3 +11,11 @@ public record UtcpTool
     public required string Transport { get; init; }
     public required string Provider { get; init; }
 }
+
+/// <summary>
+/// Extended tool with call template
+/// </summary>
+public record UtcpToolWithTemplate : UtcpTool
+{
+    public CallTemplate? CallTemplate { get; init; }
+}
