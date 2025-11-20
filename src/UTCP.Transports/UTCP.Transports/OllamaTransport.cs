@@ -25,9 +25,65 @@ public class OllamaTransport : ITransport
         return ValueTask.CompletedTask;
     }
 
+    private async Task<string> GetDefaultModelAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync($"{_baseUrl}/api/tags", cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync(cancellationToken);
+                var doc = JsonDocument.Parse(json);
+                
+                if (doc.RootElement.TryGetProperty("models", out var models) && models.GetArrayLength() > 0)
+                {
+                    // Prefer qwen2.5-coder models, then dotnet models, then cp-consciousness, then fallback to first available
+                    foreach (var model in models.EnumerateArray())
+                    {
+                        if (model.TryGetProperty("name", out var name))
+                        {
+                            var modelName = name.GetString() ?? "";
+                            if (modelName.Contains("qwen2.5-coder:7b")) return modelName;
+                        }
+                    }
+                    
+                    foreach (var model in models.EnumerateArray())
+                    {
+                        if (model.TryGetProperty("name", out var name))
+                        {
+                            var modelName = name.GetString() ?? "";
+                            if (modelName.Contains("dotnet") && modelName.Contains("coder")) return modelName;
+                        }
+                    }
+                    
+                    foreach (var model in models.EnumerateArray())
+                    {
+                        if (model.TryGetProperty("name", out var name))
+                        {
+                            var modelName = name.GetString() ?? "";
+                            if (modelName.Contains("cp-consciousness")) return modelName;
+                        }
+                    }
+                    
+                    // Fallback to first model
+                    if (models[0].TryGetProperty("name", out var firstName))
+                    {
+                        return firstName.GetString() ?? "llama3.2:latest";
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Fallback if API call fails
+        }
+        
+        return "llama3.2:latest";
+    }
+
     public async Task<UtcpResponse> CallToolAsync(UtcpRequest request, CancellationToken cancellationToken = default)
     {
-        var model = request.Parameters.GetValueOrDefault("model")?.ToString() ?? "qwen2.5-coder:32b";
+        var model = request.Parameters.GetValueOrDefault("model")?.ToString() ?? await GetDefaultModelAsync(cancellationToken);
         var prompt = request.Parameters.GetValueOrDefault("prompt")?.ToString() ?? "";
         var system = request.Parameters.GetValueOrDefault("system")?.ToString();
         var stream = request.Parameters.GetValueOrDefault("stream")?.ToString()?.ToLower() == "true";

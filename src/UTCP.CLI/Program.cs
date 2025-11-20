@@ -20,11 +20,17 @@ var paramsOption = new Option<string>(
     description: "JSON parameters for the tool"
 );
 
+var modelOption = new Option<string>(
+    name: "--model",
+    description: "Model to use (for Ollama tools)"
+);
+
 rootCommand.AddOption(providerOption);
 rootCommand.AddOption(toolOption);
 rootCommand.AddOption(paramsOption);
+rootCommand.AddOption(modelOption);
 
-rootCommand.SetHandler(async (provider, tool, paramsJson) =>
+rootCommand.SetHandler(async (provider, tool, paramsJson, model) =>
 {
     try
     {
@@ -107,15 +113,21 @@ rootCommand.SetHandler(async (provider, tool, paramsJson) =>
             
             var prompt = paramsJson ?? provider;
             
+            var ollamaParams = new Dictionary<string, object>
+            {
+                ["prompt"] = prompt,
+                ["stream"] = "false"
+            };
+            
+            if (!string.IsNullOrEmpty(model))
+            {
+                ollamaParams["model"] = model;
+            }
+            
             var testRequest = new UtcpRequest
             {
                 ToolName = tool,
-                Parameters = new Dictionary<string, object>
-                {
-                    ["prompt"] = prompt,
-                    ["model"] = "qwen2.5-coder:32b",
-                    ["stream"] = "false"
-                }
+                Parameters = ollamaParams
             };
             
             Console.WriteLine("💬 Asking Ollama...");
@@ -147,6 +159,6 @@ rootCommand.SetHandler(async (provider, tool, paramsJson) =>
         Console.Error.WriteLine($"❌ Fatal error: {ex.Message}");
         Environment.ExitCode = 1;
     }
-}, providerOption, toolOption, paramsOption);
+}, providerOption, toolOption, paramsOption, modelOption);
 
 return await rootCommand.InvokeAsync(args);

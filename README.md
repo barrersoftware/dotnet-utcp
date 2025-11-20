@@ -14,9 +14,41 @@ The Universal Tool Calling Protocol (UTCP) is a modern, flexible standard for de
 - **Type safety**: Strong typing prevents common errors
 - **Self-contained**: No runtime dependencies when deployed
 
+## Features
+
+✅ **Multiple Transports Implemented**
+- HTTP/HTTPS
+- WebSocket
+- Server-Sent Events (SSE)
+- Streamable HTTP
+- CLI/Terminal
+- Text-based
+- **Ollama** - Direct integration with local AI models
+
+✅ **Ollama Integration**
+- Auto-detects available models
+- Smart defaults (prefers qwen2.5-coder, dotnet-coder, then fallback)
+- `--model` switch for manual model selection
+- Streaming and non-streaming support
+
+✅ **CLI Tool**
+```bash
+# Ask Ollama (auto-detects best available model)
+dotnet run -- --provider "write hello world in C#" --tool ask
+
+# Specify a model
+dotnet run -- --provider "what is 2+2?" --tool ask --model "llama3.2:latest"
+
+# Test HTTP transport
+dotnet run -- --provider "https://api.example.com" --tool test-http
+
+# Execute CLI commands
+dotnet run -- --provider "ls -la" --tool test-cli
+```
+
 ## Project Status
 
-🚧 **Foundation Phase** - Setting up core architecture
+🚀 **Active Development** - Core transports working, CLI tool operational
 
 ## Contributing
 
