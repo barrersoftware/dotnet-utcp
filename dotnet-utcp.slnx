@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/UTCP.CLI/UTCP.CLI.csproj" />
     <Project Path="src/UTCP.Core/UTCP.Core.csproj" />
   </Folder>
   <Folder Name="/src/UTCP.Transports/">
