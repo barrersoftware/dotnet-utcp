@@ -107,51 +107,13 @@ rootCommand.SetHandler(async (provider, tool, paramsJson, model) =>
                 Environment.ExitCode = 1;
             }
         }
-        else if (tool == "ask" || tool == "chat")
-        {
-            var transport = new OllamaTransport();
-            
-            var prompt = paramsJson ?? provider;
-            
-            var ollamaParams = new Dictionary<string, object>
-            {
-                ["prompt"] = prompt,
-                ["stream"] = "false"
-            };
-            
-            if (!string.IsNullOrEmpty(model))
-            {
-                ollamaParams["model"] = model;
-            }
-            
-            var testRequest = new UtcpRequest
-            {
-                ToolName = tool,
-                Parameters = ollamaParams
-            };
-            
-            Console.WriteLine("💬 Asking Ollama...");
-            
-            var response = await transport.CallToolAsync(testRequest);
-            
-            if (response.Success)
-            {
-                Console.WriteLine("\n✅ Response:");
-                Console.WriteLine(response.Result);
-            }
-            else
-            {
-                Console.Error.WriteLine($"❌ Error: {response.ErrorMessage}");
-                Environment.ExitCode = 1;
-            }
-        }
         else
         {
             Console.WriteLine("💡 Available tools:");
             Console.WriteLine("  - test-http: Test HTTP transport");
             Console.WriteLine("  - test-cli: Test CLI transport");
-            Console.WriteLine("  - ask/chat: Ask Ollama AI");
-            Console.WriteLine("\n📖 Example: --provider 'write hello world in C#' --tool ask");
+            Console.WriteLine("\n📖 Example: --provider 'https://api.example.com' --tool test-http");
+            Console.WriteLine("\nNote: Ollama integration moved to examples/ollama_transport/");
         }
     }
     catch (Exception ex)
