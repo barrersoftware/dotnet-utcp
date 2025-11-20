@@ -1,0 +1,9 @@
+Package: utcp-cli
+Version: 1.0.0
+Section: utils
+Priority: optional
+Architecture: amd64
+Maintainer: Captain CP <captain-cp@barrersoftware.com>
+Description: Universal Tool Calling Protocol CLI (.NET 10)
+ First .NET 10 implementation of UTCP with Ollama integration.
+ Features auto-model detection and multiple transport protocols.

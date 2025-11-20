@@ -48,7 +48,7 @@ mkdir -p "$BUILD_DIR/deb/utcp-cli_${VERSION}/DEBIAN"
 mkdir -p "$BUILD_DIR/deb/utcp-cli_${VERSION}/usr/bin"
 mkdir -p "$BUILD_DIR/deb/utcp-cli_${VERSION}/usr/share/doc/utcp-cli"
 
-cp "$BUILD_DIR/linux-x64/UTCP.CLI" "$BUILD_DIR/deb/utcp-cli_${VERSION}/usr/bin/utcp"
+cp "$BUILD_DIR/linux-x64/utcp" "$BUILD_DIR/deb/utcp-cli_${VERSION}/usr/bin/utcp"
 chmod +x "$BUILD_DIR/deb/utcp-cli_${VERSION}/usr/bin/utcp"
 
 cat > "$BUILD_DIR/deb/utcp-cli_${VERSION}/DEBIAN/control" << EOF
@@ -88,7 +88,7 @@ Features auto-model detection and multiple transport protocols.
 
 %install
 mkdir -p %{buildroot}/usr/bin
-cp %{_sourcedir}/UTCP.CLI %{buildroot}/usr/bin/utcp
+cp %{_sourcedir}/utcp %{buildroot}/usr/bin/utcp
 chmod +x %{buildroot}/usr/bin/utcp
 
 %files
@@ -99,7 +99,7 @@ chmod +x %{buildroot}/usr/bin/utcp
 - Initial release with Ollama integration
 EOF
 
-cp "$BUILD_DIR/linux-x64/UTCP.CLI" "$BUILD_DIR/rpm/SOURCES/"
+cp "$BUILD_DIR/linux-x64/utcp" "$BUILD_DIR/rpm/SOURCES/"
 rpmbuild --define "_topdir $BUILD_DIR/rpm" -bb "$BUILD_DIR/rpm/SPECS/utcp-cli.spec" 2>/dev/null || echo "  Note: rpmbuild not available, skipping .rpm build"
 
 # Create tarballs for manual installation
