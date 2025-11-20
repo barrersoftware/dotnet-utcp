@@ -101,10 +101,45 @@ rootCommand.SetHandler(async (provider, tool, paramsJson) =>
                 Environment.ExitCode = 1;
             }
         }
+        else if (tool == "ask" || tool == "chat")
+        {
+            var transport = new OllamaTransport();
+            
+            var prompt = paramsJson ?? provider;
+            
+            var testRequest = new UtcpRequest
+            {
+                ToolName = tool,
+                Parameters = new Dictionary<string, object>
+                {
+                    ["prompt"] = prompt,
+                    ["model"] = "qwen2.5-coder:32b",
+                    ["stream"] = "false"
+                }
+            };
+            
+            Console.WriteLine("💬 Asking Ollama...");
+            
+            var response = await transport.CallToolAsync(testRequest);
+            
+            if (response.Success)
+            {
+                Console.WriteLine("\n✅ Response:");
+                Console.WriteLine(response.Result);
+            }
+            else
+            {
+                Console.Error.WriteLine($"❌ Error: {response.ErrorMessage}");
+                Environment.ExitCode = 1;
+            }
+        }
         else
         {
-            Console.WriteLine("💡 Use 'test-http' or 'test-cli' as tool name for testing");
-            Console.WriteLine("📖 Full provider loading coming soon...");
+            Console.WriteLine("💡 Available tools:");
+            Console.WriteLine("  - test-http: Test HTTP transport");
+            Console.WriteLine("  - test-cli: Test CLI transport");
+            Console.WriteLine("  - ask/chat: Ask Ollama AI");
+            Console.WriteLine("\n📖 Example: --provider 'write hello world in C#' --tool ask");
         }
     }
     catch (Exception ex)
