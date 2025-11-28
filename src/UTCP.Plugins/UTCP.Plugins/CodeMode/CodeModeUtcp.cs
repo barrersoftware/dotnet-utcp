@@ -1,12 +1,13 @@
 using System.Text.Json;
-using Microsoft.CodeAnalysis.CSharp.Scripting;
-using Microsoft.CodeAnalysis.Scripting;
+using Jint;
+using Jint.Native;
 using UTCP.Core.Models;
 
 namespace UTCP.Plugins.CodeMode;
 
 /// <summary>
-/// Minimal facade exposing UTCP calls to C# scripts executed by CodeMode
+/// CodeMode executor using Jint JavaScript interpreter with injected UTCP helpers
+/// Matches pattern from cagent/go-utcp/rs-utcp
 /// </summary>
 public class CodeModeUtcp
 {
@@ -18,7 +19,7 @@ public class CodeModeUtcp
     }
     
     /// <summary>
-    /// Execute a snippet or JSON payload, returning the resulting value and captured output
+    /// Execute a JavaScript snippet with UTCP helper functions injected
     /// </summary>
     public async Task<CodeModeResult> ExecuteAsync(CodeModeArgs args, CancellationToken cancellationToken = default)
     {
@@ -33,7 +34,7 @@ public class CodeModeUtcp
             };
         }
         
-        var value = await EvalCSharpSnippetAsync(args.Code, args.Timeout, cancellationToken);
+        var value = await EvalJavaScriptAsync(args.Code, args.Timeout, cancellationToken);
         return new CodeModeResult
         {
             Value = value,
@@ -42,39 +43,111 @@ public class CodeModeUtcp
         };
     }
     
-    private async Task<JsonElement> EvalCSharpSnippetAsync(string code, ulong? timeoutMs, CancellationToken cancellationToken)
+    private async Task<JsonElement> EvalJavaScriptAsync(string code, ulong? timeoutMs, CancellationToken cancellationToken)
     {
-        var scriptOptions = ScriptOptions.Default
-            .AddReferences(typeof(CodeModeUtcp).Assembly)
-            .AddReferences(typeof(JsonElement).Assembly)
-            .AddImports("System")
-            .AddImports("System.Collections.Generic")
-            .AddImports("System.Text.Json")
-            .AddImports("System.Threading.Tasks")
-            .AddImports("UTCP.Plugins.CodeMode");
-        
-        var globals = new ScriptGlobals
+        var engine = new Engine(options =>
         {
-            Client = _client
-        };
+            options.TimeoutInterval(TimeSpan.FromMilliseconds(timeoutMs ?? 10000));
+        });
         
-        var wrapped = $"var __out = {code};\n__out";
+        // Inject utcp helper object with call_tool and call_tool_stream
+        engine.SetValue("utcp", new
+        {
+            call_tool = new Func<string, object, Task<object>>(async (name, args) =>
+            {
+                var argsDict = ConvertToDict(args);
+                var result = await _client.CallToolAsync(name, argsDict, cancellationToken);
+                return JsonSerializer.Deserialize<object>(result.GetRawText()) ?? new { };
+            }),
+            call_tool_stream = new Func<string, object, Task<object[]>>(async (name, args) =>
+            {
+                var argsDict = ConvertToDict(args);
+                var results = new List<object>();
+                await foreach (var item in _client.CallToolStreamAsync(name, argsDict, cancellationToken))
+                {
+                    results.Add(JsonSerializer.Deserialize<object>(item.GetRawText()) ?? new { });
+                }
+                return results.ToArray();
+            })
+        });
         
         try
         {
-            var result = await CSharpScript.EvaluateAsync<object>(
-                wrapped,
-                scriptOptions,
-                globals,
-                typeof(ScriptGlobals),
-                cancellationToken);
+            var result = engine.Evaluate(code);
             
-            return JsonSerializer.SerializeToElement(result);
+            // Convert JS result to JSON string
+            var jsonString = ConvertJsValueToJsonString(result);
+            
+            return JsonDocument.Parse(jsonString).RootElement.Clone();
         }
         catch (Exception ex)
         {
             throw new InvalidOperationException($"CodeMode eval error: {ex.Message}", ex);
         }
+    }
+    
+    private string ConvertJsValueToJsonString(JsValue value)
+    {
+        return value.Type switch
+        {
+            Jint.Runtime.Types.Undefined => "null",
+            Jint.Runtime.Types.Null => "null",
+            Jint.Runtime.Types.Boolean => value.AsBoolean().ToString().ToLower(),
+            Jint.Runtime.Types.Number => value.AsNumber().ToString(System.Globalization.CultureInfo.InvariantCulture),
+            Jint.Runtime.Types.String => JsonSerializer.Serialize(value.AsString()),
+            Jint.Runtime.Types.Object => SerializeJsObject(value.AsObject()),
+            _ => "null"
+        };
+    }
+    
+    private string SerializeJsObject(Jint.Native.Object.ObjectInstance obj)
+    {
+        // Simple serialization - convert to dictionary
+        var dict = new Dictionary<string, object?>();
+        foreach (var prop in obj.GetOwnProperties())
+        {
+            var propValue = obj.Get(prop.Key);
+            dict[prop.Key.ToString()] = ConvertJsValueToObject(propValue);
+        }
+        return JsonSerializer.Serialize(dict);
+    }
+    
+    private object? ConvertJsValueToObject(JsValue value)
+    {
+        return value.Type switch
+        {
+            Jint.Runtime.Types.Undefined => null,
+            Jint.Runtime.Types.Null => null,
+            Jint.Runtime.Types.Boolean => value.AsBoolean(),
+            Jint.Runtime.Types.Number => value.AsNumber(),
+            Jint.Runtime.Types.String => value.AsString(),
+            Jint.Runtime.Types.Object => ConvertJsObjectToDictionary(value.AsObject()),
+            _ => null
+        };
+    }
+    
+    private Dictionary<string, object?> ConvertJsObjectToDictionary(Jint.Native.Object.ObjectInstance obj)
+    {
+        var dict = new Dictionary<string, object?>();
+        foreach (var prop in obj.GetOwnProperties())
+        {
+            dict[prop.Key.ToString()] = ConvertJsValueToObject(obj.Get(prop.Key));
+        }
+        return dict;
+    }
+    
+    private Dictionary<string, JsonElement> ConvertToDict(object args)
+    {
+        var json = JsonSerializer.Serialize(args);
+        var doc = JsonDocument.Parse(json);
+        var dict = new Dictionary<string, JsonElement>();
+        
+        foreach (var prop in doc.RootElement.EnumerateObject())
+        {
+            dict[prop.Name] = prop.Value.Clone();
+        }
+        
+        return dict;
     }
     
     private static bool TryParseAsJson(string text, out JsonElement value)
@@ -114,33 +187,5 @@ public class CodeModeUtcp
     public Task<List<UtcpTool>> SearchToolsAsync(string query, int limit, CancellationToken cancellationToken = default)
     {
         return _client.SearchToolsAsync(query, limit, cancellationToken);
-    }
-}
-
-/// <summary>
-/// Global variables available to C# scripts
-/// </summary>
-public class ScriptGlobals
-{
-    public IUtcpClient Client { get; set; } = null!;
-    
-    public async Task<JsonElement> CallTool(string name, Dictionary<string, JsonElement> args)
-    {
-        return await Client.CallToolAsync(name, args);
-    }
-    
-    public async Task<List<JsonElement>> CallToolStream(string name, Dictionary<string, JsonElement> args)
-    {
-        var items = new List<JsonElement>();
-        await foreach (var item in Client.CallToolStreamAsync(name, args))
-        {
-            items.Add(item);
-        }
-        return items;
-    }
-    
-    public async Task<List<UtcpTool>> SearchTools(string query, int limit)
-    {
-        return await Client.SearchToolsAsync(query, limit);
     }
 }
